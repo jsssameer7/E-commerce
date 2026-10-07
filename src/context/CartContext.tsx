@@ -1,8 +1,9 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Product, CartItem, Order, PromoCode } from '@/types/ecommerce';
+import { Product, CartItem, Order, PromoCode, UserProfile } from '@/types/ecommerce';
 import { INITIAL_PRODUCTS, VALID_PROMO_CODES } from '@/data/products';
+import { DEMO_USERS } from '@/data/users';
 
 interface ToastMessage {
   id: string;
@@ -17,6 +18,21 @@ interface CartContextType {
   orders: Order[];
   appliedPromo: PromoCode | null;
   toasts: ToastMessage[];
+  
+  // Auth state & methods
+  user: UserProfile | null;
+  isAuthModalOpen: boolean;
+  authModalMode: 'login' | 'signup';
+  openAuthModal: (mode?: 'login' | 'signup') => void;
+  closeAuthModal: () => void;
+  login: (emailOrPhone: string, password?: string) => { success: boolean; message: string };
+  loginWithOTP: (phone: string, otp: string) => { success: boolean; message: string };
+  loginAsDemoUser: (role?: 'customer' | 'admin') => void;
+  signup: (name: string, email: string, phone: string, password?: string) => { success: boolean; message: string };
+  logout: () => void;
+  updateUserProfile: (updated: Partial<UserProfile>) => void;
+
+  // Shopping & Catalog methods
   addToCart: (product: Product, quantity?: number) => void;
   removeFromCart: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
@@ -39,6 +55,8 @@ interface CartContextType {
   resetCatalog: () => void;
   updateOrderStatus: (orderId: string, status: Order['status']) => void;
   showToast: (message: string, type?: ToastMessage['type']) => void;
+  
+  // Financial & Count Totals
   subtotal: number;
   discountAmount: number;
   shippingFee: number;
@@ -58,13 +76,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // User Auth State
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'signup'>('login');
+
   // Initialize from LocalStorage or seed defaults
   useEffect(() => {
     try {
       const savedProducts = localStorage.getItem('shopvibe_products_v3');
       if (savedProducts) {
         const parsed = JSON.parse(savedProducts);
-        // If parsed products are fewer than INITIAL_PRODUCTS or have old price format, reset
         if (Array.isArray(parsed) && parsed.length >= INITIAL_PRODUCTS.length && parsed[0]?.price > 1000) {
           setProducts(parsed);
         } else {
@@ -84,6 +106,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
       const savedOrders = localStorage.getItem('shopvibe_orders');
       if (savedOrders) setOrders(JSON.parse(savedOrders));
+
+      const savedUser = localStorage.getItem('shopvibe_user');
+      if (savedUser) {
+        setUser(JSON.parse(savedUser));
+      } else {
+        // Default demo customer user logged in for friendly UX
+        setUser(DEMO_USERS[0]);
+        localStorage.setItem('shopvibe_user', JSON.stringify(DEMO_USERS[0]));
+      }
     } catch (e) {
       console.error('Error loading state from localStorage:', e);
       setProducts(INITIAL_PRODUCTS);
@@ -113,6 +144,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('shopvibe_orders', JSON.stringify(orders));
   }, [orders, isLoaded]);
 
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (user) {
+      localStorage.setItem('shopvibe_user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('shopvibe_user');
+    }
+  }, [user, isLoaded]);
+
   const showToast = (message: string, type: ToastMessage['type'] = 'success') => {
     const id = Math.random().toString(36).substring(2, 9);
     setToasts((prev) => [...prev, { id, message, type }]);
@@ -121,6 +161,88 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }, 3500);
   };
 
+  // Auth Methods
+  const openAuthModal = (mode: 'login' | 'signup' = 'login') => {
+    setAuthModalMode(mode);
+    setIsAuthModalOpen(true);
+  };
+
+  const closeAuthModal = () => {
+    setIsAuthModalOpen(false);
+  };
+
+  const login = (emailOrPhone: string, _password?: string) => {
+    const cleanInput = emailOrPhone.trim().toLowerCase();
+    const foundDemo = DEMO_USERS.find(
+      (u) => u.email.toLowerCase() === cleanInput || u.phone.includes(cleanInput)
+    );
+
+    const loggedUser: UserProfile = foundDemo || {
+      id: `user-${Date.now()}`,
+      name: cleanInput.includes('@') ? cleanInput.split('@')[0] : 'Valued Customer',
+      email: cleanInput.includes('@') ? cleanInput : `${cleanInput}@shopvibe.in`,
+      phone: cleanInput.includes('@') ? '+91 98765 43210' : cleanInput,
+      role: cleanInput.includes('admin') ? 'admin' : 'customer',
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+    };
+
+    setUser(loggedUser);
+    closeAuthModal();
+    showToast(`Welcome back, ${loggedUser.name}!`, 'success');
+    return { success: true, message: 'Login successful!' };
+  };
+
+  const loginWithOTP = (phone: string, _otp: string) => {
+    const loggedUser: UserProfile = {
+      id: `user-otp-${Date.now()}`,
+      name: 'Mobile User',
+      email: `user.${phone.replace(/\D/g, '')}@shopvibe.in`,
+      phone: phone,
+      role: 'customer',
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+    };
+
+    setUser(loggedUser);
+    closeAuthModal();
+    showToast(`Phone verified! Logged in as ${loggedUser.phone}`, 'success');
+    return { success: true, message: 'OTP verified successfully!' };
+  };
+
+  const loginAsDemoUser = (role: 'customer' | 'admin' = 'customer') => {
+    const demo = DEMO_USERS.find((u) => u.role === role) || DEMO_USERS[0];
+    setUser(demo);
+    closeAuthModal();
+    showToast(`Signed in as Demo ${role.toUpperCase()}: ${demo.name}`, 'success');
+  };
+
+  const signup = (name: string, email: string, phone: string, _password?: string) => {
+    const newUser: UserProfile = {
+      id: `user-${Date.now()}`,
+      name,
+      email,
+      phone,
+      role: 'customer',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+    };
+
+    setUser(newUser);
+    closeAuthModal();
+    showToast(`Account created successfully! Welcome ${name}`, 'success');
+    return { success: true, message: 'Account created!' };
+  };
+
+  const logout = () => {
+    setUser(null);
+    showToast('You have been logged out.', 'info');
+  };
+
+  const updateUserProfile = (updated: Partial<UserProfile>) => {
+    if (!user) return;
+    setUser((prev) => (prev ? { ...prev, ...updated } : null));
+    showToast('Profile updated successfully!', 'success');
+  };
+
+  // Shopping Methods
   const addToCart = (product: Product, quantity = 1) => {
     setCart((prevCart) => {
       const existing = prevCart.find((item) => item.product.id === product.id);
@@ -318,6 +440,19 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         orders,
         appliedPromo,
         toasts,
+        
+        user,
+        isAuthModalOpen,
+        authModalMode,
+        openAuthModal,
+        closeAuthModal,
+        login,
+        loginWithOTP,
+        loginAsDemoUser,
+        signup,
+        logout,
+        updateUserProfile,
+
         addToCart,
         removeFromCart,
         updateQuantity,

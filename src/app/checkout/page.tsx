@@ -18,13 +18,13 @@ import {
 } from 'lucide-react';
 
 export default function CheckoutPage() {
-  const { cart, subtotal, discountAmount, shippingFee, taxAmount, totalAmount, placeOrder, showToast } = useCart();
+  const { cart, subtotal, discountAmount, shippingFee, taxAmount, totalAmount, placeOrder, showToast, user } = useCart();
 
-  const [customerName, setCustomerName] = useState('Sameer Sharma');
-  const [email, setEmail] = useState('sameer.sharma@example.in');
-  const [address, setAddress] = useState('MG Road, Indiranagar');
-  const [city, setCity] = useState('Bengaluru');
-  const [zipCode, setZipCode] = useState('560038');
+  const [customerName, setCustomerName] = useState(user?.name || 'Rahul Sharma');
+  const [email, setEmail] = useState(user?.email || 'rahul.sharma@example.com');
+  const [address, setAddress] = useState(user?.address?.street || '42 MG Road, Indiranagar');
+  const [city, setCity] = useState(user?.address?.city || 'Bengaluru');
+  const [zipCode, setZipCode] = useState(user?.address?.zipCode || '560038');
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'card' | 'netbanking' | 'cod'>('upi');
 
   const [cardNumber, setCardNumber] = useState('4532 •••• •••• 8892');

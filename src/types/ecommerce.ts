@@ -59,3 +59,19 @@ export interface PromoCode {
   minSpend?: number;
   description: string;
 }
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: 'customer' | 'admin';
+  avatar?: string;
+  address?: {
+    street: string;
+    city: string;
+    state: string;
+    zipCode: string;
+  };
+}
+
